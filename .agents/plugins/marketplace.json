@@ -1,0 +1,20 @@
+{
+  "name": "podzi-official-marketplace",
+  "interface": {
+    "displayName": "Podzi for Codex"
+  },
+  "plugins": [
+    {
+      "name": "podzi-codex-plugin",
+      "source": {
+        "source": "local",
+        "path": "./plugins/podzi-codex-plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

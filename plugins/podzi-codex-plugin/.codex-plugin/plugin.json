@@ -1,0 +1,43 @@
+{
+  "name": "podzi-codex-plugin",
+  "version": "0.1.0",
+  "description": "Podzi assistant workflows for summarizing and answering questions from visible transcript segments in an open Chrome Podzi tab.",
+  "author": {
+    "name": "Isaac Lin",
+    "url": "https://podzi.cc"
+  },
+  "homepage": "https://github.com/kaoruisaac/podzi-codex-plugin",
+  "repository": "https://github.com/kaoruisaac/podzi-codex-plugin",
+  "license": "MIT",
+  "keywords": [
+    "podzi",
+    "transcript",
+    "summary"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Podzi Plugin",
+    "shortDescription": "Summarize and answer questions from the open Chrome Podzi tab.",
+    "longDescription": "Use the user's already-open Chrome tab for a Podzi episode and its window.podzi_cli bridge to read only visible, non-muted transcript segments, then summarize or answer questions from that visible transcript text.",
+    "developerName": "Isaac Lin",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://podzi.cc",
+    "privacyPolicyURL": "https://github.com/kaoruisaac/podzi-codex-plugin/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://podzi.cc/about/service",
+    "defaultPrompt": [
+      "用兩百字摘要目前 Chrome Podzi 頁面可見的逐字稿。",
+      "根據目前可見的 Podzi 逐字稿回答我的問題。",
+      "列出目前可見段落的三個重點。"
+    ],
+    "brandColor": "#22C55E",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "screenshots": [
+      "./assets/screenshot1.png"
+    ]
+  }
+}
