@@ -453,6 +453,25 @@ async function connectNativePipe(repl) {
 
 async function findNativePipeCandidates(repl, fs, os, path) {
   if (os.platform() === "win32") {
+    return await findOfficialNativePipeCandidates(fs, os, path);
+  }
+
+  const roots = uniqueStrings([repl?.tmpDir, os.tmpdir()]);
+  const candidates = await findOfficialNativePipeCandidates(fs, os, path);
+  for (const root of roots) {
+    candidates.push(...(await findUnixPipeCandidates(root, fs, path, 2)));
+  }
+  return uniqueStrings(candidates);
+}
+
+function getOfficialNativePipeRoot(os) {
+  return os.platform() === "win32" ? "\\\\.\\pipe\\codex-browser-use" : "/tmp/codex-browser-use";
+}
+
+async function findOfficialNativePipeCandidates(fs, os, path) {
+  const root = getOfficialNativePipeRoot(os);
+
+  if (os.platform() === "win32") {
     try {
       const names = await fs.readdir("\\\\.\\pipe\\");
       return names
@@ -463,12 +482,21 @@ async function findNativePipeCandidates(repl, fs, os, path) {
     }
   }
 
-  const roots = uniqueStrings([repl?.tmpDir, os.tmpdir()]);
-  const candidates = [];
-  for (const root of roots) {
-    candidates.push(...(await findUnixPipeCandidates(root, fs, path, 2)));
+  let entries;
+  try {
+    entries = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
   }
-  return uniqueStrings(candidates);
+
+  return entries
+    .filter(entry => {
+      if (typeof entry.isSocket === "function" && entry.isSocket()) {
+        return true;
+      }
+      return !entry.isDirectory();
+    })
+    .map(entry => path.join(root, entry.name));
 }
 
 async function findUnixPipeCandidates(root, fs, path, depth) {
