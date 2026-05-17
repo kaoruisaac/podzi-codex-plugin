@@ -1,6 +1,6 @@
 {
   "name": "podzi-codex-plugin",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Podzi assistant workflows through window.podzi_cli in an already-open Chrome Podzi editor tab.",
   "author": {
     "name": "Isaac Lin",
@@ -36,9 +36,6 @@
     ],
     "brandColor": "#22C55E",
     "composerIcon": "./assets/icon.png",
-    "logo": "./assets/logo.png",
-    "screenshots": [
-      "./assets/screenshot1.png"
-    ]
+    "logo": "./assets/logo.png"
   }
 }

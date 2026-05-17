@@ -1,5 +1,5 @@
 const NO_BROWSER_CLIENT_MESSAGE =
-  "NO_BROWSER_CLIENT: 請安裝/啟用 Codex Browser plugin 及 Chrome plugin";
+  "NO_BROWSER_CLIENT: 請安裝/啟用 Chrome plugin 或 Codex Browser plugin";
 
 export const STOP_SIGNALS = Object.freeze({
   NO_BROWSER_CLIENT: "NO_BROWSER_CLIENT",
@@ -261,12 +261,12 @@ async function findBrowserClientCandidates(globals) {
   const path = await import("node:path");
   const roots = [
     {
-      sourcePluginFamily: "openai-bundled/browser",
-      versionsRoot: path.join(codexHome, "plugins", "cache", "openai-bundled", "browser"),
-    },
-    {
       sourcePluginFamily: "openai-bundled/chrome",
       versionsRoot: path.join(codexHome, "plugins", "cache", "openai-bundled", "chrome"),
+    },
+    {
+      sourcePluginFamily: "openai-bundled/browser",
+      versionsRoot: path.join(codexHome, "plugins", "cache", "openai-bundled", "browser"),
     },
   ];
 
