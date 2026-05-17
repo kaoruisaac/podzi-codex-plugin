@@ -1,4 +1,4 @@
 interface:
-  display_name: "Podzi Plugin"
-  short_description: "Summarize and answer from visible transcript segments in Chrome."
-  default_prompt: "用兩百字摘要目前 Chrome Podzi 頁面可見的逐字稿。"
+  display_name: "Podzi Core Bridge"
+  short_description: "Prepare window.podzi_cli from an existing Chrome Podzi tab."
+  default_prompt: "Prepare the current Chrome Podzi tab for Podzi CLI access."

@@ -1,7 +1,7 @@
 {
   "name": "podzi-codex-plugin",
-  "version": "0.1.0",
-  "description": "Podzi assistant workflows for summarizing and answering questions from visible transcript segments in an open Chrome Podzi tab.",
+  "version": "0.1.1",
+  "description": "Podzi assistant workflows through window.podzi_cli in an already-open Chrome Podzi editor tab.",
   "author": {
     "name": "Isaac Lin",
     "url": "https://podzi.cc"
@@ -11,6 +11,7 @@
   "license": "MIT",
   "keywords": [
     "podzi",
+    "cli",
     "transcript",
     "summary"
   ],
@@ -18,7 +19,7 @@
   "interface": {
     "displayName": "Podzi Plugin",
     "shortDescription": "Summarize and answer questions from the open Chrome Podzi tab.",
-    "longDescription": "Use the user's already-open Chrome tab for a Podzi episode and its window.podzi_cli bridge to read only visible, non-muted transcript segments, then summarize or answer questions from that visible transcript text.",
+    "longDescription": "Use the user's already-open Chrome tab for a Podzi episode editor and its window.podzi_cli bridge. The core bridge prepares Podzi CLI access from the existing tab; transcript tasks read only visible, non-muted transcript segments before summarizing or answering questions.",
     "developerName": "Isaac Lin",
     "category": "Productivity",
     "capabilities": [
