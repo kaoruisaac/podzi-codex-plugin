@@ -153,19 +153,23 @@ async function resolveBrowserClient(globals) {
     return globals.podziBrowserClient;
   }
 
-  const cache = await readBrowserClientCache();
-  const cached = cache ? await loadBrowserClientCandidate(cache, { requireStatMatch: true }) : null;
+  const cache = await readBrowserClientCache(globals);
+  const cached = cache
+    ? await loadBrowserClientCandidate(globals, cache, { requireStatMatch: true })
+    : null;
   if (cached) {
     globals.podziBrowserClient = cached;
     return cached;
   }
 
-  const candidates = await findBrowserClientCandidates();
+  const candidates = await findBrowserClientCandidates(globals);
   for (const candidate of candidates) {
-    const loaded = await loadBrowserClientCandidate(candidate, { requireStatMatch: false });
+    const loaded = await loadBrowserClientCandidate(globals, candidate, {
+      requireStatMatch: false,
+    });
     if (loaded) {
       globals.podziBrowserClient = loaded;
-      await writeBrowserClientCache(loaded);
+      await writeBrowserClientCache(globals, loaded);
       return loaded;
     }
   }
@@ -177,7 +181,7 @@ function isBrowserClient(value) {
   return typeof value?.module?.setupBrowserRuntime === "function";
 }
 
-async function loadBrowserClientCandidate(candidate, { requireStatMatch }) {
+async function loadBrowserClientCandidate(globals, candidate, { requireStatMatch }) {
   try {
     if (typeof candidate?.browserClientUrl !== "string") {
       return null;
@@ -195,6 +199,7 @@ async function loadBrowserClientCandidate(candidate, { requireStatMatch }) {
       return null;
     }
 
+    await ensureProcessForBrowserClientImport(globals);
     const module = await import(candidate.browserClientUrl);
     if (typeof module.setupBrowserRuntime !== "function") {
       return null;
@@ -214,8 +219,41 @@ async function loadBrowserClientCandidate(candidate, { requireStatMatch }) {
   }
 }
 
-async function findBrowserClientCandidates() {
-  const codexHome = await getCodexHome();
+async function ensureProcessForBrowserClientImport(globals) {
+  if (globals?.process) {
+    return;
+  }
+
+  try {
+    const processModule = await import("node:process");
+    globals.process = processModule.default ?? processModule;
+    return;
+  } catch {}
+
+  const os = await import("node:os");
+  globals.process = {
+    arch: os.arch(),
+    argv: ["node", ""],
+    config: { variables: {} },
+    cwd: () => "/",
+    env: {},
+    execPath: "",
+    on: () => globals.process,
+    off: () => globals.process,
+    pid: 0,
+    platform: os.platform(),
+    uptime: () => 0,
+    version: "v20.0.0",
+    versions: {
+      modules: "115",
+      node: "20.0.0",
+      uv: "1.0.0",
+    },
+  };
+}
+
+async function findBrowserClientCandidates(globals) {
+  const codexHome = await getCodexHome(globals);
   if (!codexHome) {
     return [];
   }
@@ -275,15 +313,16 @@ async function findBrowserClientCandidatesInRoot({ sourcePluginFamily, versionsR
   return candidates;
 }
 
-async function getCodexHome() {
+async function getCodexHome(globals) {
   const os = await import("node:os");
   const path = await import("node:path");
-  const home = process.env.USERPROFILE || process.env.HOME || os.homedir();
+  const env = globals?.process?.env ?? {};
+  const home = env.USERPROFILE || env.HOME || os.homedir();
   return home ? path.join(home, ".codex") : null;
 }
 
-async function getBrowserClientCachePath() {
-  const codexHome = await getCodexHome();
+async function getBrowserClientCachePath(globals) {
+  const codexHome = await getCodexHome(globals);
   if (!codexHome) {
     return null;
   }
@@ -292,9 +331,9 @@ async function getBrowserClientCachePath() {
   return path.join(codexHome, "podzi-codex-plugin", "browser-client.json");
 }
 
-async function readBrowserClientCache() {
+async function readBrowserClientCache(globals) {
   try {
-    const cachePath = await getBrowserClientCachePath();
+    const cachePath = await getBrowserClientCachePath(globals);
     if (!cachePath) {
       return null;
     }
@@ -306,9 +345,9 @@ async function readBrowserClientCache() {
   }
 }
 
-async function writeBrowserClientCache(browserClient) {
+async function writeBrowserClientCache(globals, browserClient) {
   try {
-    const cachePath = await getBrowserClientCachePath();
+    const cachePath = await getBrowserClientCachePath(globals);
     if (!cachePath) {
       return;
     }
