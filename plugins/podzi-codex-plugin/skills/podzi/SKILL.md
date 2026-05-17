@@ -51,10 +51,13 @@ On failure, return the helper result as-is. You may add one short Traditional Ch
 
 ## Stop Signals
 
+- `NO_BROWSER_CLIENT`
 - `NO_CHROME_EXTENSION_BACKEND`
 - `NO_PODZI_TAB`
 - `NO_CHROME_EXTENSION_PIPE`
 - `PODZI_CLI_NOT_READY`
 - `PODZI_ERROR: ...`
+
+If the result is `NO_BROWSER_CLIENT`, ask the user to install/enable the Codex Browser plugin and Chrome plugin.
 
 If a tab was claimed, the helper finalizes it before returning.
