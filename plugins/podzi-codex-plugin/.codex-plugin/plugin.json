@@ -1,6 +1,6 @@
 {
   "name": "podzi-codex-plugin",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Podzi assistant workflows through window.podzi_cli in an already-open Chrome Podzi editor tab.",
   "author": {
     "name": "Isaac Lin",
@@ -13,18 +13,23 @@
     "podzi",
     "cli",
     "transcript",
-    "summary"
+    "summary",
+    "text editing",
+    "batch edit",
+    "batch skip",
+    "skip"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Podzi Plugin",
-    "shortDescription": "Summarize and answer questions from the open Chrome Podzi tab.",
-    "longDescription": "Use the user's already-open Chrome tab for a Podzi episode editor and its window.podzi_cli bridge. The core bridge prepares Podzi CLI access from the existing tab; transcript tasks read only visible, non-muted transcript segments before summarizing or answering questions.",
+    "shortDescription": "Summarize, answer, and preview edits from the open Chrome Podzi tab.",
+    "longDescription": "Use the user's already-open Chrome tab for a Podzi episode editor and its window.podzi_cli bridge. The core bridge prepares Podzi CLI access from the existing tab; transcript tasks read only visible, non-muted transcript segments before summarizing, answering questions, previewing batch text edits, or previewing batch skip ranges in Podzi's review UI.",
     "developerName": "Isaac Lin",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
-      "Read"
+      "Read",
+      "Write"
     ],
     "websiteURL": "https://podzi.cc",
     "privacyPolicyURL": "https://github.com/kaoruisaac/podzi-codex-plugin/blob/main/PRIVACY.md",
@@ -32,7 +37,9 @@
     "defaultPrompt": [
       "用兩百字摘要目前 Chrome Podzi 頁面可見的逐字稿。",
       "根據目前可見的 Podzi 逐字稿回答我的問題。",
-      "列出目前可見段落的三個重點。"
+      "列出目前可見段落的三個重點。",
+      "修正目前可見 Podzi 逐字稿的標點並送出預覽編輯。",
+      "跳過目前可見 Podzi 逐字稿中重複的廣告段落並送出預覽。"
     ],
     "brandColor": "#22C55E",
     "composerIcon": "./assets/icon.png",

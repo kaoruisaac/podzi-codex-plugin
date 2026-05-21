@@ -1,0 +1,4 @@
+interface:
+  display_name: "Podzi Batch Skip"
+  short_description: "Preview batch skip ranges for Podzi transcript."
+  default_prompt: "Use $podzi-batch-skip to preview batch skip ranges for the visible Podzi transcript."

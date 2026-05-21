@@ -1,0 +1,4 @@
+interface:
+  display_name: "Podzi Batch Text Edit"
+  short_description: "Preview batch edits for Podzi transcript text."
+  default_prompt: "Use $podzi-batch-text-edit to preview batch text edits for the visible Podzi transcript."
