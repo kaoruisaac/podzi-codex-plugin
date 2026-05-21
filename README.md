@@ -2,7 +2,7 @@
 
 This repository defines the official Podzi marketplace entry for Codex and packages the `podzi-codex-plugin` plugin.
 
-The plugin helps Codex work with a Podzi episode that the user has already opened in Chrome. It first prepares the Podzi page bridge, `window.podzi_cli`, from an existing `/episode/editor` tab. Read-only transcript tasks call `get_visible_segments_text` and use only the returned visible transcript text. Batch text-edit and batch skip tasks use those visible segments to send preview edits or skip ranges to Podzi's review UI.
+The plugin helps Codex work with a Podzi episode that the user has already opened in Chrome. It first prepares the Podzi page bridge, `window.podzi_cli`, from an existing `/episode/editor` tab. Read-only transcript tasks call `get_visible_segments_text` and use only the returned visible transcript text. Batch text-edit tasks call `get_editable_text` to target editable segments by index, and batch skip tasks use visible segments to send preview skip ranges to Podzi's review UI.
 
 ## Repository Shape
 
@@ -20,25 +20,30 @@ plugins/podzi-codex-plugin/
 
 The marketplace is named `podzi-official-marketplace`, shown as `Podzi for Codex`, and includes one plugin shown as `Podzi Plugin`.
 
-The `podzi` skill is the shared core bridge. It only obtains `window.podzi_cli` from an existing Chrome tab. The `podzi-visible-transcript` skill handles summaries, Q&A, and highlights by calling `window.podzi_cli.run("get_visible_segments_text")` through the shared helper script. The `podzi-batch-text-edit` skill uses the same visible transcript format to call `window.podzi_cli.run("batch_text_edit", edits)` and preview replacement text for full segments. The `podzi-batch-skip` skill uses the same visible transcript format to call `window.podzi_cli.run("batch_skip", skips)` and preview skip ranges for review.
+The `podzi` skill is the shared core bridge. It only obtains `window.podzi_cli` from an existing Chrome tab. The `podzi-visible-transcript` skill handles summaries, Q&A, and highlights by calling `window.podzi_cli.run("get_visible_segments_text")` through the shared helper script. The `podzi-batch-text-edit` skill calls `window.podzi_cli.run("get_editable_text", fromTimestamp, toTimestamp)` to get editable segment indexes, then calls `window.podzi_cli.run("batch_text_edit", edits)` to preview replacement text for full segments. The `podzi-batch-skip` skill uses the visible transcript format to call `window.podzi_cli.run("batch_skip", skips)` and preview skip ranges for review.
 
 `get_visible_segments_text` returns one plain-text item with newline-separated segments, each formatted as:
 
-`[HH:MM:SS.mmm - HH:MM:SS.mmm] Speaker Name: text`
+`[HH:MM:SS.mmm] Speaker Name: text`
 
 Only visible, non-muted, non-skipped segments are included. Partially muted or skipped words are removed, and the remaining segments are ordered by edited time.
 
-`batch_text_edit` accepts an array of complete segment replacements:
+`get_editable_text` accepts an edited-time range and returns JSON content with newline-separated editable segments, each formatted as:
+
+`[segmentIndex] Speaker Name: text`
+
+The `segmentIndex` is the index in Podzi's full effective edited segment list, not the relative index within the returned filtered text.
+
+`batch_text_edit` accepts an object of complete segment replacements keyed by `segmentIndex`:
 
 ```js
-[
-  { speakerName: "Speaker", start: 1.234, end: 5.678, text: "replacement text" }
-]
+{
+  2: "replacement text",
+  3: "another replacement text"
+}
 ```
 
-The `start` and `end` values use edited seconds from the visible transcript timestamps. Podzi stores these edits for review until the user applies or rejects them in the editor.
-
-`batch_text_edit` requires each item to match exactly one segment. `batch_skip` accepts edited-time ranges that overlap transcript content on one speaker track and may span multiple segments:
+Podzi stores these edits for review until the user applies or rejects them in the editor. `batch_skip` accepts edited-time ranges that overlap transcript content on one speaker track and may span multiple segments:
 
 ```js
 [

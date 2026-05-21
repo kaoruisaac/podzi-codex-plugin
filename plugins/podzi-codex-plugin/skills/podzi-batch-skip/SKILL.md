@@ -43,7 +43,7 @@ If `visible.ok` is false, stop and report `visible.step` plus `visible.result`. 
 
 Parse only lines formatted as:
 
-`[HH:MM:SS.mmm - HH:MM:SS.mmm] Speaker Name: text`
+`[HH:MM:SS.mmm] Speaker Name: text`
 
 Build a skip item for each range that should be previewed:
 

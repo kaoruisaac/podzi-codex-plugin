@@ -391,6 +391,22 @@ function parsePodziToolResult(toolName, toolResult, tabInfo) {
     };
   }
 
+  if (toolName === "get_editable_text") {
+    const jsonItem = value?.content?.[0];
+    const text = jsonItem?.type === "json" ? jsonItem.data?.content : undefined;
+    if (typeof text !== "string" || !text.trim()) {
+      return stop("Parse Result", STOP_SIGNALS.NO_VISIBLE_TRANSCRIPT, tabInfo);
+    }
+
+    return {
+      ok: true,
+      step: "Parse Result",
+      tab: tabInfo,
+      text,
+      result: value,
+    };
+  }
+
   return {
     ok: true,
     step: "Parse Result",

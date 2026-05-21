@@ -1,0 +1,4 @@
+version: 1
+models:
+  openai:
+    default_prompt: "Use $podzi-episode-info to read current Podzi episode metadata."

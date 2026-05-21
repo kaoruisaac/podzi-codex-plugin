@@ -1,13 +1,13 @@
 ---
 name: podzi-batch-text-edit
-description: Preview batch transcript text edits in the user's already-open Chrome Podzi editor tab. Use this when the user asks to correct, rewrite, punctuate, normalize terminology, or batch-edit currently visible Podzi transcript text; it reads visible segments with `get_visible_segments_text` and sends complete replacement segment text through `window.podzi_cli.run("batch_text_edit", edits)` via the Podzi core bridge.
+description: Preview batch transcript text edits in the user's already-open Chrome Podzi editor tab. Use this when the user asks to correct, rewrite, punctuate, normalize terminology, or batch-edit Podzi transcript text; it reads editable segments with `get_editable_text(fromTimestamp, toTimestamp)` and sends complete replacement segment text through `window.podzi_cli.run("batch_text_edit", { [segmentIndex]: text })` via the Podzi core bridge.
 ---
 
 # Podzi Batch Text Edit
 
-Use this skill to create review-preview transcript text edits for currently visible Podzi segments. The edits are sent to Podzi's review UI with `isReviewing`; do not claim they are permanently applied.
+Use this skill to create review-preview transcript text edits for Podzi segments returned by `get_editable_text`. The edits are sent to Podzi's review UI with `isReviewing`; do not claim they are permanently applied.
 
-Always gather visible segment context first. Do not invent speaker names, timestamps, or target segments.
+Always gather editable segment context first. Do not invent speaker names, timestamps, segment indexes, or target segments.
 
 ## Hard Rules
 
@@ -16,11 +16,11 @@ Always gather visible segment context first. Do not invent speaker names, timest
 - Do not open, navigate, reload, or create any browser tab.
 - Do not use Playwright.
 - Do not inspect page text, DOM text, screenshots, or other sources.
-- Use only visible, non-muted transcript segments returned by `get_visible_segments_text`.
+- Use only editable transcript segments returned by `get_editable_text`.
+- Use only `segmentIndex` values returned by `get_editable_text` as edit targets.
 - Send only complete replacement text for full target segments. Do not send diffs, partial snippets, or commentary as edit text.
-- Preserve each returned `speakerName` exactly.
-- Convert timestamps from `HH:MM:SS.mmm` to edited seconds before calling `batch_text_edit`.
-- Ask the user for clarification if the target segment, speaker, or intended replacement text is ambiguous.
+- Do not send `speakerName`, `start`, or `end` to `batch_text_edit`; it accepts only `{ [segmentIndex]: text }`.
+- Ask the user for clarification if the target segment index or intended replacement text is ambiguous.
 - Stop if any step returns a stop signal. Report the step name and exact result; do not search for another method.
 
 ## Workflow
@@ -33,52 +33,52 @@ const { runPodziCliTool } = await import(
 );
 ```
 
-Fetch visible transcript text first:
+Fetch editable transcript text first. `fromTimestamp` and `toTimestamp` are edited seconds:
 
 ```js
-const visible = await runPodziCliTool("get_visible_segments_text");
-nodeRepl.write(JSON.stringify(visible, null, 2));
+const editable = await runPodziCliTool("get_editable_text", fromTimestamp, toTimestamp);
+nodeRepl.write(JSON.stringify(editable, null, 2));
 ```
 
-If `visible.ok` is false, stop and report `visible.step` plus `visible.result`. If the helper returns `NO_VISIBLE_TRANSCRIPT`, stop and report that there is no visible transcript text to edit.
+If `editable.ok` is false, stop and report `editable.step` plus `editable.result`. If the helper returns `NO_VISIBLE_TRANSCRIPT`, stop and report that there is no editable transcript text to edit.
 
 Parse only lines formatted as:
 
-`[HH:MM:SS.mmm - HH:MM:SS.mmm] Speaker Name: text`
+`[segmentIndex] Speaker Name: text`
 
-Build an edit item for each segment that needs a change:
+Build one object property for each segment that needs a change:
 
 ```js
 {
-  speakerName: "Speaker Name",
-  start: 1.234,
-  end: 5.678,
-  text: "complete replacement transcript text"
+  2: "complete replacement transcript text",
+  3: "another complete replacement transcript text"
 }
 ```
 
 Submit all edits in one batch:
 
 ```js
-const edits = [
-  { speakerName: "Speaker Name", start: 1.234, end: 5.678, text: "replacement text" }
-];
+const edits = {
+  2: "complete replacement transcript text"
+};
 const result = await runPodziCliTool("batch_text_edit", edits);
 nodeRepl.write(JSON.stringify(result, null, 2));
 ```
 
 If `result.ok` is false, stop and report `result.step` plus `result.result`. If `result.ok` is true, tell the user how many segment edits were previewed and remind them to review/apply or reject them in Podzi.
 
+On success, read `result.result.content[0].data` for `appliedCount` and `segments`. Each returned segment includes `speakerName`, `segmentIndex`, `segmentId`, `start`, `end`, and `text`.
+
 ## Edit Construction
 
-- Treat each visible transcript line as one segment candidate.
-- Use the line's start and end edited timestamps as the `start` and `end` seconds.
+- Treat each editable transcript line as one segment candidate.
+- Use the number inside `[segmentIndex]` as the object key.
 - Use the text after `Speaker Name:` as the source text for deciding replacements.
-- Include unchanged surrounding words in `text`; Podzi replaces the segment text exactly with the provided value.
-- Keep the batch free of duplicate target segments.
-- Do not include empty or whitespace-only replacement text.
+- Include unchanged surrounding words in the replacement value; Podzi replaces the segment text exactly with the provided value.
+- `segmentIndex` is the index in Podzi's full effective edited segment list, not the relative index within the returned filtered text.
+- Do not include empty or whitespace-only replacement values.
 
-For broad cleanup requests such as punctuation, casing, filler-word removal, or terminology normalization, edit only segments where the intended change is clear from the user's request and visible context.
+For broad cleanup requests such as punctuation, casing, filler-word removal, or terminology normalization, edit only segments where the intended change is clear from the user's request and editable context.
 
 ## Stop Signals
 

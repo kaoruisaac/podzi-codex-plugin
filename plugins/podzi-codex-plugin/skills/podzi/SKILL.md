@@ -1,6 +1,6 @@
 ---
 name: podzi
-description: Core Podzi bridge for the user's already-open Chrome Podzi tab. Use when the user invokes the Podzi plugin, asks to prepare or use Podzi, or any Podzi task needs window.podzi_cli. This skill must first obtain window.podzi_cli from an existing Chrome tab whose URL contains /episode/editor; transcript reading, summaries, and Q&A should use the podzi-visible-transcript skill.
+description: Core Podzi bridge for the user's already-open Chrome Podzi tab. Use when the user invokes the Podzi plugin, asks to prepare or use Podzi, or any Podzi task needs window.podzi_cli. This skill must first obtain window.podzi_cli from an existing Chrome tab whose URL contains /episode/editor; episode metadata should use podzi-episode-info, while transcript reading, summaries, and Q&A should use the podzi-visible-transcript skill.
 ---
 
 # Podzi Core Bridge

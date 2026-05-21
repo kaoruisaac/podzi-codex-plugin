@@ -9,7 +9,7 @@ Use this skill for read-only transcript tasks such as summaries, Q&A, highlights
 
 `get_visible_segments_text` returns a single `content` item with `type: "text"`. The text is newline-separated, one segment per line, formatted as:
 
-`[HH:MM:SS.mmm - HH:MM:SS.mmm] Speaker Name: text`
+`[HH:MM:SS.mmm] Speaker Name: text`
 
 Only visible, non-muted, non-skipped transcript segments are included. Partially muted or skipped words are removed from the segment text. Segments are ordered by edited time.
 
