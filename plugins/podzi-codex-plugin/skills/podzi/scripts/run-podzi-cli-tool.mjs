@@ -422,7 +422,7 @@ async function connectNativePipe(repl) {
   const path = await import("node:path");
   const { Buffer } = await import("node:buffer");
 
-  const request = async (pipe, method, params, timeoutMs = 15000) => {
+  const request = async (pipe, method, params, timeoutMs = 5 * 60 * 1000) => {
     return await new Promise((resolve, reject) => {
       const socket = net.createConnection(pipe);
       const parse = parseFrames(os, Buffer);

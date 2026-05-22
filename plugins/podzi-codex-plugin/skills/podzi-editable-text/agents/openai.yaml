@@ -1,0 +1,4 @@
+interface:
+  display_name: "Podzi Editable Text"
+  short_description: "Read editable Podzi transcript segments with segment indexes."
+  default_prompt: "Use $podzi-editable-text to read editable Podzi transcript context for a time range."
