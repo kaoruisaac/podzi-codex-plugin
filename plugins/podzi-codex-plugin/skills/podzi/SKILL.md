@@ -56,8 +56,11 @@ On failure, return the helper result as-is. You may add one short Traditional Ch
 - `NO_PODZI_TAB`
 - `NO_CHROME_EXTENSION_PIPE`
 - `PODZI_CLI_NOT_READY`
+- `PODZI_TAB_BUSY`
 - `PODZI_ERROR: ...`
+
+If another agent is already using the Podzi tab, the helper waits up to 60 seconds. If the wait times out, it returns `PODZI_TAB_BUSY`; retry after the other agent finishes.
 
 If the result is `NO_BROWSER_CLIENT`, ask the user to install/enable the Codex Browser plugin and Chrome plugin.
 
-If a tab was claimed, the helper finalizes it before returning.
+If a tab was claimed, the helper hands off control before returning.

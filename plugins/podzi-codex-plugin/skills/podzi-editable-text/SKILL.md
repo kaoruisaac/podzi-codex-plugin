@@ -59,6 +59,7 @@ For each parsed line, preserve `segmentIndex` exactly as the target key for futu
 - `NO_PODZI_TAB`
 - `NO_CHROME_EXTENSION_PIPE`
 - `PODZI_CLI_NOT_READY`
+- `PODZI_TAB_BUSY`
 - `PODZI_ERROR: ...`
 - `NO_VISIBLE_TRANSCRIPT`
 

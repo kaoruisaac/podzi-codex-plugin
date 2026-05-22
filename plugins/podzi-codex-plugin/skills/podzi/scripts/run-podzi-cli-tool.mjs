@@ -8,7 +8,14 @@ export const STOP_SIGNALS = Object.freeze({
   NO_CHROME_EXTENSION_PIPE: "NO_CHROME_EXTENSION_PIPE",
   PODZI_CLI_NOT_READY: "PODZI_CLI_NOT_READY",
   NO_VISIBLE_TRANSCRIPT: "NO_VISIBLE_TRANSCRIPT",
+  PODZI_TAB_BUSY: "PODZI_TAB_BUSY",
 });
+
+const PODZI_TAB_LOCK_MAX_WAIT_MS = 60_000;
+const PODZI_TAB_LOCK_POLL_MS = 300;
+const PODZI_TAB_LOCK_STALE_MS = 120_000;
+const PODZI_SESSION_RETRY_BACKOFF_MS = [300, 800];
+const PODZI_SESSION_MAX_RETRIES = 2;
 
 export async function preparePodziCli() {
   return await runPodziFlow({ executeTool: false });
@@ -29,6 +36,8 @@ async function runPodziFlow({ executeTool, toolName, toolArgs = [] }) {
   let browser;
   let claimed = false;
   let tabInfo;
+  let podziTab;
+  let lockHeld = false;
 
   try {
     const browserClient = await resolveBrowserClient(globals);
@@ -50,6 +59,19 @@ async function runPodziFlow({ executeTool, toolName, toolArgs = [] }) {
     globals.browser = browser;
     await browser.nameSession("Podzi CLI");
 
+    step = "Resolve Session";
+    const sessionKey = resolveTurnSessionKey(repl);
+    if (!sessionKey) {
+      return remember(globals, stop(step, "PODZI_ERROR: missing turn metadata"));
+    }
+
+    step = "Acquire Podzi Tab Lock";
+    const lock = await acquirePodziTabLock(globals, sessionKey, "/episode/editor");
+    if (!lock) {
+      return remember(globals, stop(step, STOP_SIGNALS.PODZI_TAB_BUSY));
+    }
+    lockHeld = true;
+
     step = "Claim Existing Podzi Tab";
     const tabs = await browser.user.openTabs();
     globals.podziOpenTabs = tabs;
@@ -58,38 +80,62 @@ async function runPodziFlow({ executeTool, toolName, toolArgs = [] }) {
       return remember(globals, stop(step, STOP_SIGNALS.NO_PODZI_TAB));
     }
 
-    const podziTab = await browser.user.claimTab(podziCandidate);
-    claimed = true;
-    globals.podziTab = podziTab;
-    tabInfo = {
-      title: await podziTab.title(),
-      url: await podziTab.url(),
-      id: podziTab.id,
-    };
+    let raw;
+    let tabId;
+    let lastError;
 
-    step = "Connect Native Pipe";
-    const rawChrome = await connectNativePipe(repl);
-    if (!rawChrome.pipe) {
-      return remember(globals, stop(step, STOP_SIGNALS.NO_CHROME_EXTENSION_PIPE, tabInfo));
-    }
-    globals.rawChrome = rawChrome;
+    for (let attempt = 0; attempt <= PODZI_SESSION_MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          await sleep(PODZI_SESSION_RETRY_BACKOFF_MS[attempt - 1] ?? 800);
+          if (claimed && browser && podziTab) {
+            try {
+              await browser.tabs.finalize({
+                keep: [{ tab: podziTab, status: "handoff" }],
+              });
+            } catch {}
+            claimed = false;
+          }
+        }
 
-    const raw = async (method, params) => {
-      const msg = await rawChrome.request(
-        rawChrome.pipe,
-        method,
-        { ...params, ...rawChrome.params },
-        15000
-      );
-      if (msg.error) {
-        throw new Error(msg.error.message || JSON.stringify(msg.error));
+        step = "Claim Existing Podzi Tab";
+        podziTab = await browser.user.claimTab(podziCandidate);
+        claimed = true;
+        globals.podziTab = podziTab;
+        tabInfo = {
+          title: await podziTab.title(),
+          url: await podziTab.url(),
+          id: podziTab.id,
+        };
+        tabId = Number(podziTab.id);
+
+        step = "Connect Native Pipe";
+        const rawChrome = await connectNativePipe(repl, sessionKey, { tabId });
+        if (!rawChrome.pipe) {
+          return remember(globals, stop(step, STOP_SIGNALS.NO_CHROME_EXTENSION_PIPE, tabInfo));
+        }
+        globals.rawChrome = rawChrome;
+        raw = createNativePipeRaw(rawChrome);
+        globals.rawChromeRaw = raw;
+
+        if (!rawChrome.preAttached) {
+          await raw("attach", { tabId });
+        }
+
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (attempt < PODZI_SESSION_MAX_RETRIES && isRetryablePodziSessionError(error)) {
+          continue;
+        }
+        throw error;
       }
-      return msg.result;
-    };
-    globals.rawChromeRaw = raw;
+    }
 
-    const tabId = Number(podziTab.id);
-    await raw("attach", { tabId });
+    if (lastError) {
+      throw lastError;
+    }
 
     step = "Verify Podzi CLI";
     const cliType = await raw("executeCdp", {
@@ -135,10 +181,15 @@ async function runPodziFlow({ executeTool, toolName, toolArgs = [] }) {
     const message = error instanceof Error ? error.message : String(error);
     return remember(globals, stop(step, `PODZI_ERROR: ${message}`, tabInfo));
   } finally {
-    if (claimed && browser) {
+    if (claimed && browser && podziTab) {
       try {
-        await browser.tabs.finalize({});
+        await browser.tabs.finalize({
+          keep: [{ tab: podziTab, status: "handoff" }],
+        });
       } catch {}
+    }
+    if (lockHeld) {
+      await releasePodziTabLock();
     }
   }
 }
@@ -415,7 +466,195 @@ function parsePodziToolResult(toolName, toolResult, tabInfo) {
   };
 }
 
-async function connectNativePipe(repl) {
+function resolveTurnSessionKey(repl) {
+  const meta = repl?.requestMeta?.["x-codex-turn-metadata"] ?? {};
+  const turnId = meta.turn_id;
+  if (!turnId) {
+    return null;
+  }
+
+  let sessionId;
+  if (meta.thread_source === "subagent" && meta.thread_id) {
+    sessionId = meta.thread_id;
+  } else {
+    sessionId = meta.session_id;
+  }
+
+  if (!sessionId) {
+    return null;
+  }
+
+  return {
+    session_id: sessionId,
+    turn_id: turnId,
+    thread_source: meta.thread_source,
+  };
+}
+
+function isRetryablePodziSessionError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("not part of browser session") ||
+    lower === "timeout" ||
+    lower.includes("attach timeout")
+  );
+}
+
+function isRetryableNativePipeError(error) {
+  if (!error) {
+    return false;
+  }
+
+  const message =
+    typeof error === "string" ? error : error.message || JSON.stringify(error);
+  return message.toLowerCase().includes("not part of browser session");
+}
+
+function pipeSessionMatches(result, sessionKey) {
+  if (!result || !sessionKey?.session_id) {
+    return false;
+  }
+
+  const candidates = [
+    result.session_id,
+    result.sessionId,
+    result.session?.id,
+    result.session?.session_id,
+  ].filter(value => typeof value === "string" && value.length > 0);
+
+  return candidates.includes(sessionKey.session_id);
+}
+
+function createNativePipeRaw(rawChrome) {
+  return async (method, params) => {
+    const msg = await rawChrome.request(
+      rawChrome.pipe,
+      method,
+      { ...params, ...rawChrome.params },
+      15000
+    );
+    if (msg.error) {
+      throw new Error(msg.error.message || JSON.stringify(msg.error));
+    }
+    return msg.result;
+  };
+}
+
+async function getPodziTabLockPath(globals) {
+  const codexHome = await getCodexHome(globals);
+  if (!codexHome) {
+    return null;
+  }
+
+  const path = await import("node:path");
+  return path.join(codexHome, "podzi-codex-plugin", "podzi-tab.lock");
+}
+
+async function getLockProcessPid(globals) {
+  await ensureProcessForBrowserClientImport(globals);
+  const pid = globals?.process?.pid;
+  return typeof pid === "number" && pid > 0 ? pid : undefined;
+}
+
+function isPidAlive(pid) {
+  if (typeof pid !== "number" || pid <= 0) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function acquirePodziTabLock(globals, sessionKey, tabUrlHint) {
+  const lockDepth = globalThis.__podziTabLockDepth ?? 0;
+  if (lockDepth > 0) {
+    globalThis.__podziTabLockDepth = lockDepth + 1;
+    return { reentrant: true };
+  }
+
+  const lockPath = await getPodziTabLockPath(globals);
+  if (!lockPath) {
+    return null;
+  }
+
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+  await fs.mkdir(path.dirname(lockPath), { recursive: true });
+
+  const pid = await getLockProcessPid(globals);
+  const startedWaiting = Date.now();
+
+  while (Date.now() - startedWaiting < PODZI_TAB_LOCK_MAX_WAIT_MS) {
+    const lockContent = {
+      pid: pid ?? null,
+      sessionKey,
+      turnId: sessionKey.turn_id,
+      startedAt: new Date().toISOString(),
+      tabUrlHint,
+    };
+
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      await handle.writeFile(`${JSON.stringify(lockContent, null, 2)}\n`, "utf8");
+      await handle.close();
+      globalThis.__podziTabLockDepth = 1;
+      globalThis.__podziTabLockPath = lockPath;
+      return { reentrant: false, lockPath };
+    } catch (error) {
+      if (error?.code !== "EEXIST") {
+        throw error;
+      }
+
+      try {
+        const existing = JSON.parse(await fs.readFile(lockPath, "utf8"));
+        const startedAt = new Date(existing.startedAt).getTime();
+        const isStale =
+          Number.isFinite(startedAt) &&
+          Date.now() - startedAt > PODZI_TAB_LOCK_STALE_MS;
+        if (isStale && existing.pid && !isPidAlive(existing.pid)) {
+          await fs.unlink(lockPath).catch(() => {});
+          continue;
+        }
+      } catch {}
+
+      await sleep(PODZI_TAB_LOCK_POLL_MS);
+    }
+  }
+
+  return null;
+}
+
+async function releasePodziTabLock() {
+  const depth = globalThis.__podziTabLockDepth ?? 0;
+  if (depth <= 0) {
+    return;
+  }
+
+  if (depth > 1) {
+    globalThis.__podziTabLockDepth = depth - 1;
+    return;
+  }
+
+  globalThis.__podziTabLockDepth = 0;
+  const lockPath = globalThis.__podziTabLockPath;
+  globalThis.__podziTabLockPath = undefined;
+
+  if (lockPath) {
+    const fs = await import("node:fs/promises");
+    await fs.unlink(lockPath).catch(() => {});
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function connectNativePipe(repl, sessionKey, { tabId } = {}) {
   const fs = await import("node:fs/promises");
   const net = await import("node:net");
   const os = await import("node:os");
@@ -451,20 +690,55 @@ async function connectNativePipe(repl) {
   };
 
   const pipes = await findNativePipeCandidates(repl, fs, os, path);
-  const meta = repl?.requestMeta?.["x-codex-turn-metadata"] ?? {};
-  const params = { session_id: meta.session_id, turn_id: meta.turn_id };
-  const working = [];
+  const params = { session_id: sessionKey.session_id, turn_id: sessionKey.turn_id };
+  const extensionPipes = [];
+  const matchedPipes = [];
 
   for (const pipe of pipes) {
     try {
       const msg = await request(pipe, "getInfo", params, 1000);
-      if (msg.result?.type === "extension") {
-        working.push(pipe);
+      if (msg.result?.type !== "extension") {
+        continue;
+      }
+
+      extensionPipes.push({ pipe, info: msg.result });
+      if (pipeSessionMatches(msg.result, sessionKey)) {
+        matchedPipes.push(pipe);
       }
     } catch {}
   }
 
-  return { request, pipe: working[0], params };
+  if (matchedPipes.length > 0) {
+    return { request, pipe: matchedPipes[0], params };
+  }
+
+  if (extensionPipes.length === 1) {
+    return { request, pipe: extensionPipes[0].pipe, params };
+  }
+
+  if (tabId != null && extensionPipes.length > 1) {
+    for (const { pipe } of extensionPipes.slice(0, 3)) {
+      try {
+        const msg = await request(pipe, "attach", { tabId, ...params }, 5000);
+        if (!msg.error) {
+          return { request, pipe, params, preAttached: true };
+        }
+        if (!isRetryableNativePipeError(msg.error)) {
+          continue;
+        }
+      } catch (error) {
+        if (!isRetryablePodziSessionError(error)) {
+          continue;
+        }
+      }
+    }
+  }
+
+  if (extensionPipes.length > 1) {
+    return { request, pipe: null, params };
+  }
+
+  return { request, pipe: extensionPipes[0]?.pipe ?? null, params };
 }
 
 async function findNativePipeCandidates(repl, fs, os, path) {

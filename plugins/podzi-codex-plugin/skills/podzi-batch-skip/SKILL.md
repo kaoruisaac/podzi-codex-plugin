@@ -88,6 +88,7 @@ For broad cleanup requests such as removing filler words, ads, off-topic section
 - `NO_PODZI_TAB`
 - `NO_CHROME_EXTENSION_PIPE`
 - `PODZI_CLI_NOT_READY`
+- `PODZI_TAB_BUSY`
 - `PODZI_ERROR: ...`
 - `NO_VISIBLE_TRANSCRIPT`
 

@@ -56,6 +56,7 @@ If `result.ok` is true, read `result.result.content[0].data.content` and use onl
 - `NO_PODZI_TAB`
 - `NO_CHROME_EXTENSION_PIPE`
 - `PODZI_CLI_NOT_READY`
+- `PODZI_TAB_BUSY`
 - `PODZI_ERROR: ...`
 
 If the result is `NO_BROWSER_CLIENT`, ask the user to install/enable the Codex Browser plugin and Chrome plugin.
