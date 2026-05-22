@@ -71,13 +71,13 @@ On success, read `result.result.content[0].data` for `appliedCount` and `skips`.
 
 ## Skip Construction
 
-- Do not send a `text` field; `batch_skip` only accepts `{ speakerName, start, end }`.
+- Each skip item accepts `{ speakerName, start, end }`.
 - Each range must overlap transcript content on that speaker's track. A range with no overlap returns `PODZI_ERROR: batch_skip range ... does not overlap ...`.
 - A range may span multiple segments. It does not need to align to a single segment boundary.
 - You may merge adjacent visible lines from the same speaker into one `{ start, end }` range when the user wants to skip the whole block.
 - You may use a sub-range within a visible segment's edited timestamps when the user's request is narrower than the full line.
 - Require finite numbers with `start < end`. Do not send an empty array.
-- Unlike `batch_text_edit`, duplicate segment targeting is not rejected, but overlapping or ambiguous ranges should be avoided when the user's intent is unclear.
+- Duplicate segment targeting is allowed, but avoid overlapping or ambiguous ranges when the user's intent is unclear.
 
 For broad cleanup requests such as removing filler words, ads, off-topic sections, or repeated lines, skip only ranges where the target is clear from the user's request and visible context.
 

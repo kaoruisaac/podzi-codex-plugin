@@ -1,6 +1,6 @@
 ---
 name: podzi-editable-text
-description: Read editable Podzi transcript text with stable segment indexes from the user's already-open Chrome Podzi editor tab. Use when the user asks to inspect editable transcript context, list targetable transcript segments, or gather segmentIndex context for later Podzi batch text edits; it calls `window.podzi_cli.run("get_editable_text", fromTimestamp, toTimestamp)` through the Podzi core bridge and consumes only the returned JSON content.
+description: Read editable Podzi transcript text with stable segment indexes from the user's already-open Chrome Podzi editor tab. Use when the user asks to inspect editable transcript context or list targetable transcript segments; it calls `window.podzi_cli.run("get_editable_text", fromTimestamp, toTimestamp)` through the Podzi core bridge and consumes only the returned JSON content.
 ---
 
 # Podzi Editable Text
@@ -11,7 +11,7 @@ Use this skill for read-only editable transcript context. The only source materi
 
 `[segmentIndex] Speaker Name: text`
 
-`segmentIndex` is the index in Podzi's full effective edited segment list, not the relative index within the returned filtered text.
+`segmentIndex` is the index in Podzi's full effective edited segment list.
 
 ## Hard Rules
 
@@ -50,8 +50,7 @@ For each parsed line, preserve `segmentIndex` exactly as the target key for futu
 
 - When the user asks to inspect context, show the returned lines as-is or summarize them without changing segment indexes.
 - When the user asks for possible edit targets, include `segmentIndex`, speaker name, and the current text.
-- When the user asks for downstream batch text edit preparation, make clear that each replacement must be complete segment text.
-- Do not claim edits were previewed or applied; this skill only reads editable context.
+- This skill is read-only; report editable segment context without submitting edits.
 
 ## Stop Signals
 

@@ -19,7 +19,6 @@ Always gather editable segment context first. Do not invent speaker names, times
 - Use only editable transcript segments returned by `get_editable_text`.
 - Use only `segmentIndex` values returned by `get_editable_text` as edit targets.
 - Send only complete replacement text for full target segments. Do not send diffs, partial snippets, or commentary as edit text.
-- Do not send `speakerName`, `start`, or `end` to `batch_text_edit`; it accepts only `{ [segmentIndex]: text }`.
 - Ask the user for clarification if the target segment index or intended replacement text is ambiguous.
 - Stop if any step returns a stop signal. Report the step name and exact result; do not search for another method.
 
@@ -65,9 +64,9 @@ const result = await runPodziCliTool("batch_text_edit", edits);
 nodeRepl.write(JSON.stringify(result, null, 2));
 ```
 
-If `result.ok` is false, stop and report `result.step` plus `result.result`. If `result.ok` is true, tell the user how many segment edits were previewed and remind them to review/apply or reject them in Podzi.
+If `result.ok` is false, stop and report `result.step` plus `result.result`. If `result.ok` is true, tell the user how many segment edits were previewed based on the submitted `edits` object (for example, `Object.keys(edits).length`), optionally summarize which `segmentIndex` keys were submitted, and remind them to review/apply or reject them in Podzi. Do not claim the edits are permanently applied.
 
-On success, read `result.result.content[0].data` for `appliedCount` and `segments`. Each returned segment includes `speakerName`, `segmentIndex`, `segmentId`, `start`, `end`, and `text`.
+On success, read `result.result.content[0].data.success === true` as confirmation only.
 
 ## Edit Construction
 
@@ -75,7 +74,7 @@ On success, read `result.result.content[0].data` for `appliedCount` and `segment
 - Use the number inside `[segmentIndex]` as the object key.
 - Use the text after `Speaker Name:` as the source text for deciding replacements.
 - Include unchanged surrounding words in the replacement value; Podzi replaces the segment text exactly with the provided value.
-- `segmentIndex` is the index in Podzi's full effective edited segment list, not the relative index within the returned filtered text.
+- `segmentIndex` is the index in Podzi's full effective edited segment list.
 - Do not include empty or whitespace-only replacement values.
 
 For broad cleanup requests such as punctuation, casing, filler-word removal, or terminology normalization, edit only segments where the intended change is clear from the user's request and editable context.
