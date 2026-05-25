@@ -1,15 +1,15 @@
 ---
 name: podzi-batch-text-edit
-description: Preview batch transcript text edits in the user's already-open Chrome Podzi editor tab. Use this when the user asks to correct, rewrite, punctuate, normalize terminology, or batch-edit Podzi transcript text; it reads editable segments with `get_editable_text(fromTimestamp, toTimestamp)` and sends complete replacement segment text through `window.podzi_cli.run("batch_text_edit", { [segmentIndex]: text })` via the Podzi core bridge. Before editing, fetch episode metadata with `episode_info`, then dispatch `get_editable_text` and `batch_text_edit` to subagents in time windows of at most 20 minutes each so the main agent does not accumulate full-transcript context.
+description: Preview batch transcript text edits in the user's already-open Chrome Podzi editor tab. Use this when the user asks to correct, rewrite, punctuate, normalize terminology, or batch-edit Podzi transcript text; it reads editable segments with `get_editable_text(fromTimestamp, toTimestamp)` and sends complete replacement segment text through `window.podzi_cli.run("batch_text_edit", { [segmentIndex]: text })` via the Podzi core bridge. Before editing, fetch episode metadata with `episode_info` and plan time windows of at most 20 minutes. For episodes longer than 20 minutes, ask the user to explicitly authorize subagents before dispatching windowed work.
 ---
 
 # Podzi Batch Text Edit
 
 Use this skill to create review-preview transcript text edits for Podzi segments returned by `get_editable_text`. The edits are sent to Podzi's review UI with `isReviewing`; do not claim they are permanently applied.
 
-The **main agent** orchestrates the task: call `episode_info` first, split the episode into time windows, dispatch subagents, and aggregate results. Do not fetch the full episode transcript in the main thread.
+The **main agent** orchestrates the task: call `episode_info` first, split the episode into time windows, and either process a single window itself or dispatch subagents after explicit user authorization. Do not fetch more than one 20-minute window of transcript text in the main thread.
 
-Each **subagent** handles one time window: fetch editable segments with `get_editable_text`, build replacement text, and submit with `batch_text_edit`.
+Subagents are optional for episodes up to 20 minutes. For episodes longer than 20 minutes, the main agent must ask the user to explicitly authorize subagents before dispatching work. After authorization, each subagent handles one time window: fetch editable segments with `get_editable_text`, build replacement text, and submit with `batch_text_edit`.
 
 Do not invent speaker names, timestamps, segment indexes, or target segments.
 
@@ -21,8 +21,10 @@ Do not invent speaker names, timestamps, segment indexes, or target segments.
 - Do not use Playwright.
 - Do not inspect page text, DOM text, screenshots, or other sources.
 - Before any `get_editable_text` or `batch_text_edit` call, the main agent must successfully call `episode_info` and use the returned `keywords` and `modified_audio_duration_seconds` for planning.
-- The main agent must not run large-range `get_editable_text` calls itself; dispatch both `get_editable_text` and `batch_text_edit` to subagents within their assigned time windows.
-- Each subagent's `[fromTimestamp, toTimestamp)` span must not exceed 1200 edited seconds (20 minutes). If the episode is longer, the main agent must split it into multiple windows and dispatch one subagent per window.
+- The main agent may process the transcript itself only when the planned scope is a single window of at most 1200 edited seconds (20 minutes).
+- The main agent must not run `get_editable_text` for any span longer than 1200 edited seconds.
+- If `modified_audio_duration_seconds > 1200` or the requested edit scope spans more than one 20-minute window, ask the user to explicitly authorize subagents before fetching editable transcript text. Do not dispatch subagents unless the user explicitly asks for subagents, delegation, or parallel agent work.
+- After explicit authorization for a longer episode, split the work into windows where each `[fromTimestamp, toTimestamp)` span does not exceed 1200 edited seconds and dispatch one subagent per window.
 - Use only editable transcript segments returned by `get_editable_text`.
 - Use only `segmentIndex` values returned by `get_editable_text` as edit targets.
 - Send only complete replacement text for full target segments. Do not send diffs, partial snippets, or commentary as edit text.
@@ -41,7 +43,7 @@ const { runPodziCliTool } = await import(
 
 ### Pre-flight: Episode Info
 
-The main agent calls `episode_info` before dispatching any subagent:
+The main agent calls `episode_info` before fetching editable transcript text or dispatching any subagent:
 
 ```js
 const episode = await runPodziCliTool("episode_info");
@@ -52,7 +54,7 @@ If `episode.ok` is false, stop and report `episode.step` plus `episode.result`.
 
 If `episode.ok` is true, read `episode.result.content[0].data.content` and keep:
 
-- `keywords` — episode content keywords or transcription prompt; pass this to each subagent for terminology alignment.
+- `keywords` — episode content keywords or transcription prompt; use this for terminology alignment, and pass it to each subagent when subagents are authorized.
 - `modified_audio_duration_seconds` — edited episode length; use this as the upper bound for time-window planning.
 
 ### Chunk Planning
@@ -65,24 +67,39 @@ Example for a 3600-second episode:
 - `[1200, 2400)`
 - `[2400, 3600)`
 
-The main agent keeps only episode metadata, the list of `{ fromTimestamp, toTimestamp }` windows, and a short summary of the user's edit intent. Do not retain full transcript text in the main thread.
+If there is exactly one window, the main agent may run the Single-window Workflow itself.
 
-### Subagent Dispatch
+If there is more than one window, ask the user to explicitly authorize subagents before fetching editable transcript text. A concise request is enough, for example: "This episode is longer than 20 minutes, so this skill needs explicit permission to use subagents for windowed transcript edits. Please confirm that I should use subagents."
 
-For each time window, the main agent starts a subagent (for example, with the Cursor `Task` tool). Each subagent prompt must include:
+Until the user authorizes subagents, keep only episode metadata, the list of `{ fromTimestamp, toTimestamp }` windows, and a short summary of the user's edit intent. Do not retain full transcript text in the main thread.
+
+### Single-window Workflow
+
+For one window of at most 1200 edited seconds, the main agent runs the same per-window workflow directly:
+
+- Fetch editable segments with `get_editable_text(fromTimestamp, toTimestamp)`.
+- Build complete replacement segment text from the returned editable transcript lines.
+- Submit all clear edits for that window with `batch_text_edit`.
+- Report how many segment edits were previewed and remind the user to review, apply, or reject them in Podzi.
+
+### Authorized Subagent Dispatch
+
+Only use this section after the user explicitly authorizes subagents, delegation, or parallel agent work.
+
+For each time window, the main agent starts a subagent with the available multi-agent/subagent tool. Each subagent prompt must include:
 
 - The user's edit request
 - The assigned `fromTimestamp` and `toTimestamp`
 - The episode `keywords`
-- Instructions to follow this skill's Hard Rules and the Per-chunk Workflow below
+- Instructions to follow this skill's Hard Rules and the Per-window Workflow below
 
 Multiple subagents may queue on the Podzi tab lock or return `PODZI_TAB_BUSY`. The subagent should report that stop signal; the main agent may retry that window after the other caller finishes.
 
 After all subagents complete, the main agent aggregates how many segment edits were previewed per window, reports any stop signals, and reminds the user to review, apply, or reject the edits in Podzi.
 
-### Per-chunk Workflow (Subagent)
+### Per-window Workflow
 
-The subagent runs this workflow inside its assigned time window. `fromTimestamp` and `toTimestamp` are edited seconds assigned by the main agent and must span at most 1200 seconds.
+The main agent or authorized subagent runs this workflow inside one assigned time window. `fromTimestamp` and `toTimestamp` are edited seconds assigned during chunk planning and must span at most 1200 seconds.
 
 Fetch editable transcript text for the assigned window:
 
@@ -128,7 +145,7 @@ On success, read `result.result.content[0].data.success === true` as confirmatio
 - Include unchanged surrounding words in the replacement value; Podzi replaces the segment text exactly with the provided value.
 - `segmentIndex` is the index in Podzi's full effective edited segment list.
 - Do not include empty or whitespace-only replacement values.
-- For terminology normalization or content polishing, the subagent should use the `keywords` passed by the main agent, but each replacement value must still be based only on segments returned by `get_editable_text` in that subagent's window.
+- For terminology normalization or content polishing, use the `keywords` from `episode_info`, but each replacement value must still be based only on segments returned by `get_editable_text` in the current window.
 
 For broad cleanup requests such as punctuation, casing, filler-word removal, or terminology normalization, edit only segments where the intended change is clear from the user's request and editable context.
 

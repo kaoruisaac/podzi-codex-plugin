@@ -1,6 +1,6 @@
 {
   "name": "podzi-codex-plugin",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Podzi assistant workflows through window.podzi_cli in an already-open Chrome Podzi editor tab.",
   "author": {
     "name": "Isaac Lin",
